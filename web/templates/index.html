@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Chat Interface</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .chat-container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 800px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2em;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #e9ecef;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        .message.user {
+            align-items: flex-end;
+        }
+        .message.bot {
+            align-items: flex-start;
+        }
+        .message-bubble {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            line-height: 1.4;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        .message.user .message-bubble {
+            background-color: #DCF8C6;
+            color: #333;
+        }
+        .message.bot .message-bubble {
+            background-color: #ffffff;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+        .chat-input-area {
+            display: flex;
+            padding: 15px 20px;
+            border-top: 1px solid #dee2e6;
+            background-color: #f8f9fa;
+        }
+        .chat-input-area input {
+            flex-grow: 1;
+            padding: 10px 15px;
+            border: 1px solid #ced4da;
+            border-radius: 20px;
+            font-size: 1em;
+            margin-right: 10px;
+            outline: none;
+        }
+        .chat-input-area button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.2s ease;
+        }
+        .chat-input-area button:hover {
+            background-color: #0056b3;
+        }
+        .chat-input-area button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .summary-button {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s ease;
+        }
+        .summary-button:hover {
+            background-color: #5a6268;
+        }
+        .summary-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .error-message {
+            color: red;
+            padding: 10px 20px;
+            background-color: #ffe0e0;
+            border-bottom: 1px solid #ffb3b3;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <span>RAG Chatbot</span>
+            <button id="summarizeButton" class="summary-button">Summarize Conversation</button>
+        </div>
+        {% if setup_error %}
+            <div class="error-message">
+                {{ setup_error }}
+            </div>
+        {% endif %}
+        <div class="chat-messages" id="chatMessages">
+            <!-- Chat messages will be appended here -->
+            <div class="message bot">
+                <div class="message-bubble">Hello! How can I help you today?</div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="questionInput" placeholder="Type your question..." {% if setup_error %}disabled{% endif %}>
+            <button id="sendButton" {% if setup_error %}disabled{% endif %}>Send</button>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chatMessages');
+        const questionInput = document.getElementById('questionInput');
+        const sendButton = document.getElementById('sendButton');
+        const summarizeButton = document.getElementById('summarizeButton');
+
+        // Store conversation history for summarization
+        const conversationHistory = [];
+
+        function addMessage(sender, text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender);
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.classList.add('message-bubble');
+            bubbleDiv.textContent = text;
+            messageDiv.appendChild(bubbleDiv);
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight; // Scroll to bottom
+        }
+
+        async function sendMessage() {
+            const question = questionInput.value.trim();
+            if (!question) return;
+
+            addMessage('user', question);
+            conversationHistory.push(`User: ${question}`); // Add to history
+            questionInput.value = ''; // Clear input
+            sendButton.disabled = true;
+            summarizeButton.disabled = true;
+            questionInput.disabled = true;
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ question: question }),
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    addMessage('bot', data.answer);
+                    conversationHistory.push(`Bot: ${data.answer}`); // Add to history
+                } else {
+                    addMessage('bot', `Error: ${data.error || 'Something went wrong.'}`);
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                addMessage('bot', 'Error: Could not connect to the server.');
+            } finally {
+                sendButton.disabled = false;
+                summarizeButton.disabled = false;
+                questionInput.disabled = false;
+                questionInput.focus();
+            }
+        }
+
+        async function summarizeConversation() {
+            if (conversationHistory.length === 0) {
+                addMessage('bot', 'No conversation to summarize yet!');
+                return;
+            }
+
+            sendButton.disabled = true;
+            summarizeButton.disabled = true;
+            questionInput.disabled = true;
+            addMessage('bot', 'Summarizing conversation...'); // Indicate processing
+
+            try {
+                const response = await fetch('/api/summarize', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ conversation_history: conversationHistory }),
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    addMessage('bot', `Summary: ${data.summary}`);
+                } else {
+                    addMessage('bot', `Error summarizing: ${data.error || 'Something went wrong.'}`);
+                }
+            } catch (error) {
+                console.error('Error summarizing conversation:', error);
+                addMessage('bot', 'Error: Could not connect to the server for summarization.');
+            } finally {
+                sendButton.disabled = false;
+                summarizeButton.disabled = false;
+                questionInput.disabled = false;
+            }
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+        questionInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        summarizeButton.addEventListener('click', summarizeConversation);
+
+        // Initial focus
+        if (!{{ setup_error | tojson }}) { // Check if setup_error is not present
+            questionInput.focus();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "pipeline_settings": {
+    "model": "phi3:latest",
+    "prompt_template": "Answer the question based only on the following context:\n\n{context}\n\nQuestion: {question}"
+  },
+  "data_processing": {
+    "docs_path": "./sample_data",
+    "allowed_extensions": [".txt", ".md", ".py", ".json"],
+    "chunk_size": 1000,
+    "chunk_overlap": 200
+  }
+}
