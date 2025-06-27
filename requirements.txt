@@ -1,9 +1,9 @@
 langchain
 langchain_community
-chromadb
-ollama
+langchain-chroma
+langchain-ollama
 fastapi
 uvicorn[standard]
 python-multipart
 jinja2
-tree_sitter_languages
+javalang

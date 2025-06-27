@@ -3,6 +3,7 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+import logging
 
 class RAGPipeline:
     """
@@ -27,7 +28,7 @@ class RAGPipeline:
             | llm
             | StrOutputParser()
         )
-        print("RAG pipeline built successfully.")
+        logging.getLogger(__name__).info("RAG pipeline built successfully.")
 
     def ask(self, question: str) -> str:
         """Queries the RAG chain with a question and returns the answer."""

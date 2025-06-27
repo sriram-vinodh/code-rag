@@ -1,12 +1,15 @@
 from typing import List, Dict, Iterator
 from langchain_core.documents import Document
 from parser_interface import ParserInterface
+import logging
 
 try:
     from bs4 import BeautifulSoup
     BS4_IS_AVAILABLE = True
 except ImportError:
     BS4_IS_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 class DefaultDocumentParser(ParserInterface):
     """
@@ -17,7 +20,7 @@ class DefaultDocumentParser(ParserInterface):
     def _parse_html(self, content: str, file_path: str) -> str:
         """Parses HTML content to extract text."""
         if not BS4_IS_AVAILABLE:
-            print(f"Warning: HTML file '{file_path}' detected, but `beautifulsoup4` is not installed. "
+            logger.warning(f"HTML file '{file_path}' detected, but `beautifulsoup4` is not installed. "
                   "Content will be treated as plain text. For better results, please `pip install beautifulsoup4`.")
             return content
         
@@ -38,17 +41,22 @@ class DefaultDocumentParser(ParserInterface):
         """
         documents = []
         for file_data in file_data_iterator:
-            file_path = file_data['file_path']
-            content = file_data['content']
-            metadata = {"source": file_path}
-
-            if file_path.lower().endswith(('.html', '.htm')):
-                page_content = self._parse_html(content, file_path)
-            elif file_path.lower().endswith('.java'):
-                page_content = content
-                metadata["language"] = "java"
-            else:
-                page_content = content
-            
-            documents.append(Document(page_content=page_content, metadata=metadata))
+            doc = self._process_single_file(file_data)
+            documents.append(doc)
         return documents
+
+    def _process_single_file(self, file_data: Dict[str, str]) -> Document:
+        """Processes a single file's content into a Document object."""
+        file_path = file_data['file_path']
+        content = file_data['content']
+        metadata = {"source": file_path}
+
+        if file_path.lower().endswith(('.html', '.htm')):
+            page_content = self._parse_html(content, file_path)
+        elif file_path.lower().endswith('.java'):
+            page_content = content
+            metadata["language"] = "java"
+        else:
+            page_content = content
+        
+        return Document(page_content=page_content, metadata=metadata)
