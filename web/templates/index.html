@@ -37,6 +37,11 @@
             justify-content: space-between;
             align-items: center;
         }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
         .chat-messages {
             flex-grow: 1;
             padding: 20px;
@@ -114,6 +119,13 @@
             font-size: 0.9em;
             transition: background-color 0.2s ease;
         }
+        .reload-button {
+            background-color: #dc3545;
+            margin-left: 10px;
+        }
+        .reload-button:hover {
+            background-color: #c82333;
+        }
         .summary-button:hover {
             background-color: #5a6268;
         }
@@ -133,8 +145,10 @@
 <body>
     <div class="chat-container">
         <div class="chat-header">
-            <span>RAG Chatbot</span>
-            <button id="summarizeButton" class="summary-button">Summarize Conversation</button>
+            <span>Code & Docs RAG</span>
+            <div class="header-controls">
+                <button id="reloadDataButton" class="summary-button reload-button">Reload Data</button>
+            </div>
         </div>
         {% if setup_error %}
             <div class="error-message">
@@ -157,7 +171,6 @@
         const chatMessages = document.getElementById('chatMessages');
         const questionInput = document.getElementById('questionInput');
         const sendButton = document.getElementById('sendButton');
-        const summarizeButton = document.getElementById('summarizeButton');
 
         // Store conversation history for summarization
         const conversationHistory = [];
@@ -181,7 +194,6 @@
             conversationHistory.push(`User: ${question}`); // Add to history
             questionInput.value = ''; // Clear input
             sendButton.disabled = true;
-            summarizeButton.disabled = true;
             questionInput.disabled = true;
 
             try {
@@ -205,45 +217,8 @@
                 addMessage('bot', 'Error: Could not connect to the server.');
             } finally {
                 sendButton.disabled = false;
-                summarizeButton.disabled = false;
                 questionInput.disabled = false;
                 questionInput.focus();
-            }
-        }
-
-        async function summarizeConversation() {
-            if (conversationHistory.length === 0) {
-                addMessage('bot', 'No conversation to summarize yet!');
-                return;
-            }
-
-            sendButton.disabled = true;
-            summarizeButton.disabled = true;
-            questionInput.disabled = true;
-            addMessage('bot', 'Summarizing conversation...'); // Indicate processing
-
-            try {
-                const response = await fetch('/api/summarize', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ conversation_history: conversationHistory }),
-                });
-
-                const data = await response.json();
-                if (response.ok) {
-                    addMessage('bot', `Summary: ${data.summary}`);
-                } else {
-                    addMessage('bot', `Error summarizing: ${data.error || 'Something went wrong.'}`);
-                }
-            } catch (error) {
-                console.error('Error summarizing conversation:', error);
-                addMessage('bot', 'Error: Could not connect to the server for summarization.');
-            } finally {
-                sendButton.disabled = false;
-                summarizeButton.disabled = false;
-                questionInput.disabled = false;
             }
         }
 
@@ -253,7 +228,6 @@
                 sendMessage();
             }
         });
-        summarizeButton.addEventListener('click', summarizeConversation);
 
         // Initial focus
         if (!{{ setup_error | tojson }}) { // Check if setup_error is not present

@@ -4,9 +4,7 @@ import logging
 import javalang.tree
 import javalang.tokenizer
 import javalang.parse
-
 logger = logging.getLogger(__name__)
-
 @dataclass
 class MethodDeclaration:
     """Represents a parsed Java method."""

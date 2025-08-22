@@ -1,7 +1,7 @@
 {
   "pipeline_settings": {
     "model": "phi3:latest",
-    "prompt_template": "Answer the question based only on the following context:\n\n{context}\n\nQuestion: {question}"
+    "templates_file": "prompt_templates.json"
   },
   "data_processing": {
     "code_path": "./code",
@@ -14,5 +14,15 @@
     "java_chunker_fallback_order": ["cpg", "ast"],
     "background_cpg_generation_enabled": false,
     "cpg_vector_store_path": "./chroma_cpg_db"
+  },
+  "logging": {
+    "level": "DEBUG"
+  }
+  ,
+  "neo4j": {
+    "uri": "neo4j://localhost:7687",
+    "user": "neo4j",
+    "password": "12345678",
+    "database": "neo4j"
   }
 }

@@ -7,3 +7,10 @@ uvicorn[standard]
 python-multipart
 jinja2
 javalang
+tqdm
+numpy
+scikit-learn
+neo4j
+torch
+pandas
+debugpy

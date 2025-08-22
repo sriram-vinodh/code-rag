@@ -1,11 +1,9 @@
 import os
 from typing import List, Dict, Iterator
-
 class FileLoader:
     """
     A class to load files from a specified directory with given extensions.
     """
-
     def __init__(self, directory_path: str, allowed_extensions: List[str]):
         """
         Initializes the FileLoader.

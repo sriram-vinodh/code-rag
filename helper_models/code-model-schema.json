@@ -1,0 +1,435 @@
+[
+  {
+    "value": {
+      "CLASS": {
+        "count": 1,
+        "labels": [
+
+        ],
+        "properties": {
+          "name": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "package": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          }
+        },
+        "type": "node",
+        "relationships": {}
+      },
+      "Field": {
+        "count": 178,
+        "labels": [
+
+        ],
+        "properties": {
+          "name": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          }
+        },
+        "type": "node",
+        "relationships": {
+          "HAS_FIELD": {
+            "count": 34,
+            "direction": "in",
+            "labels": [
+              "Class"
+            ],
+            "properties": {}
+          }
+        }
+      },
+      "Method": {
+        "count": 3623,
+        "labels": [
+
+        ],
+        "properties": {
+          "lastSeen": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "createdAt": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "name": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "code": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "signature": {
+            "unique": true,
+            "indexed": true,
+            "type": "STRING",
+            "existence": false
+          }
+        },
+        "type": "node",
+        "relationships": {
+          "HAS_PARAMETER": {
+            "count": 0,
+            "direction": "out",
+            "labels": [
+              "Class"
+            ],
+            "properties": {}
+          },
+          "CALLS": {
+            "count": 7576,
+            "direction": "out",
+            "labels": [
+              "Method",
+              "Method"
+            ],
+            "properties": {}
+          },
+          "HAS_METHOD": {
+            "count": 2251,
+            "direction": "in",
+            "labels": [
+              "Class",
+              "Enum",
+              "Interface"
+            ],
+            "properties": {}
+          }
+        }
+      },
+      "File": {
+        "count": 268,
+        "labels": [
+
+        ],
+        "properties": {
+          "lastSeen": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "createdAt": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "path": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          }
+        },
+        "type": "node",
+        "relationships": {
+          "CONTAINS_TYPE": {
+            "count": 0,
+            "direction": "out",
+            "labels": [
+              "Class",
+              "Interface",
+              "Enum"
+            ],
+            "properties": {}
+          }
+        }
+      },
+      "HAS_METHOD": {
+        "count": 2546,
+        "properties": {},
+        "type": "relationship"
+      },
+      "HAS_FIELD": {
+        "count": 34,
+        "properties": {},
+        "type": "relationship"
+      },
+      "CONTAINS": {
+        "count": 271,
+        "properties": {},
+        "type": "relationship"
+      },
+      "CONTAINS_TYPE": {
+        "count": 269,
+        "properties": {},
+        "type": "relationship"
+      },
+      "Interface": {
+        "count": 25,
+        "labels": [
+
+        ],
+        "properties": {
+          "lastSeen": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "file_path": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "createdAt": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "name": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          }
+        },
+        "type": "node",
+        "relationships": {
+          "HAS_METHOD": {
+            "count": 0,
+            "direction": "out",
+            "labels": [
+              "Method"
+            ],
+            "properties": {}
+          },
+          "CONTAINS": {
+            "count": 271,
+            "direction": "in",
+            "labels": [
+              "Package"
+            ],
+            "properties": {}
+          },
+          "CONTAINS_TYPE": {
+            "count": 269,
+            "direction": "in",
+            "labels": [
+              "File"
+            ],
+            "properties": {}
+          }
+        }
+      },
+      "IMPORTS": {
+        "count": 65,
+        "properties": {},
+        "type": "relationship"
+      },
+      "HAS_PARAMETER": {
+        "count": 1,
+        "properties": {},
+        "type": "relationship"
+      },
+      "Enum": {
+        "count": 2,
+        "labels": [
+
+        ],
+        "properties": {
+          "file_path": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "createdAt": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "name": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          }
+        },
+        "type": "node",
+        "relationships": {
+          "HAS_METHOD": {
+            "count": 0,
+            "direction": "out",
+            "labels": [
+              "Method"
+            ],
+            "properties": {}
+          },
+          "CONTAINS": {
+            "count": 271,
+            "direction": "in",
+            "labels": [
+              "Package"
+            ],
+            "properties": {}
+          },
+          "CONTAINS_TYPE": {
+            "count": 269,
+            "direction": "in",
+            "labels": [
+              "File"
+            ],
+            "properties": {}
+          }
+        }
+      },
+      "Class": {
+        "count": 475,
+        "labels": [
+
+        ],
+        "properties": {
+          "extension": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "lastSeen": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "file_path": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "createdAt": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          },
+          "name": {
+            "unique": true,
+            "indexed": true,
+            "type": "STRING",
+            "existence": false
+          },
+          "package": {
+            "unique": false,
+            "indexed": false,
+            "type": "STRING",
+            "existence": false
+          }
+        },
+        "type": "node",
+        "relationships": {
+          "IMPORTS": {
+            "count": 0,
+            "direction": "out",
+            "labels": [
+              "Class",
+              "Class"
+            ],
+            "properties": {}
+          },
+          "HAS_PARAMETER": {
+            "count": 1,
+            "direction": "in",
+            "labels": [
+              "Method"
+            ],
+            "properties": {}
+          },
+          "HAS_METHOD": {
+            "count": 0,
+            "direction": "out",
+            "labels": [
+              "Method"
+            ],
+            "properties": {}
+          },
+          "HAS_FIELD": {
+            "count": 0,
+            "direction": "out",
+            "labels": [
+              "Field"
+            ],
+            "properties": {}
+          },
+          "CONTAINS": {
+            "count": 271,
+            "direction": "in",
+            "labels": [
+              "Package"
+            ],
+            "properties": {}
+          },
+          "CONTAINS_TYPE": {
+            "count": 269,
+            "direction": "in",
+            "labels": [
+              "File"
+            ],
+            "properties": {}
+          }
+        }
+      },
+      "CALLS": {
+        "count": 53380,
+        "properties": {},
+        "type": "relationship"
+      },
+      "Package": {
+        "count": 60,
+        "labels": [
+
+        ],
+        "properties": {
+          "name": {
+            "unique": true,
+            "indexed": true,
+            "type": "STRING",
+            "existence": false
+          }
+        },
+        "type": "node",
+        "relationships": {
+          "CONTAINS": {
+            "count": 0,
+            "direction": "out",
+            "labels": [
+              "Class",
+              "Interface",
+              "Enum"
+            ],
+            "properties": {}
+          }
+        }
+      },
+      "IMPLEMENTS_INTERFACE": {
+        "count": 3,
+        "properties": {},
+        "type": "relationship"
+      }
+    }
+  }
+]

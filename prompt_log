@@ -1,0 +1,77 @@
+why is there no plan being generated? when a user prompts, i want the pipeline to :
+
+1 draft a plan to execute the required help.
+2 each step should be in a JSON, with the step being the content and another key defining whether it needs external context or not, a boolean
+3 if a step requires context, there should exist a required_context_description, which would describe the required context like "where is X function invoked?"
+4 the pipeline then runs each step through a separate pass, cumulating the fetched context. to fetch the context, the NL needs to be translated to DSL and the queried from the graph database. this should be pluggable and the app should select the knowledgebase based on the content from the json itself. 
+5 set a list of knowledgebases and corresponding keys as context to the initial prompt. also augment it to make the LLM assume that it is an expert SDE
+for now, let the graph database be the only knowledge source
+
+
+===============
+
+i want this to happen in a loop. when a prompt comes, the first step is to augment it with the step generation prompt, then send it to the LLM.
+
+the LLM drafts the steps required to complete the tasks and returns it along with context requirements.
+each step should be run should be processed, if it needs context, that should be fetched, then sent to the LLM. the result should be consolidated then passed to the second step and so on.
+===========
+
+the first step is still fetching context. the original prompt has no context. it should only be passed to LLM to draft plan
+===============
+
+I want you to restructure this project and possible change the flow. 
+
+When a prompt comes in, it:
+
+>Goes through a PromptProcessor object, whose sole job is to send the user's prompt with the necessary augmentations to the LLM, to fetch the TaskExecutionPlan
+>The results from the LLM is structured in JSON, with keys denoting the total number of steps, the actual steps and step complexity, the steps are inner JSONs, which have desription, a key to determine if external context fetch is required, if it is, the Natural language descripton of the required context, and also the Knowledge base identifier. These objects are composedc onto TaskExecutionPlan Object which exibits the Chain pattern.
+>The steps are then executed on a StepExecutor Object, which takes in a taskChain, and executes them one by one, cumulatively adding and summarising context as required. 
+>The StepExecutor can use the NL to DSL convertor to process data as needed. 
+
+Make sure to handle errors and edge cases at each step, providing fallback mechanisms or alternative plans as necessary.
+
+=================================================
+
+explain the prompt flow to me:
+
+Prompt Flow Explanation
+The current prompt flow follows these steps:
+
+Initial User Question Processing
+
+User's question is received by the Application class
+Passed to PromptProcessor which augments it with instructions to generate a plan
+
+Plan Generation
+
+The augmented prompt is sent to the LLM
+LLM returns a structured JSON plan like:
+Plan Execution
+
+TaskExecutionPlan processes each step sequentially
+For steps requiring context:
+Natural language context description is converted to DSL (Cypher) using the RNN model
+Context is fetched from specified knowledge base
+Results are accumulated and passed to next steps
+Context Processing
+
+Each step's context is processed by the LLM
+Results are chained through subsequent steps
+Final answer is generated using accumulated context
+Configuration is controlled via config.json, which specifies:
+
+LLM model to use ("Phi3:latest")
+Neo4j connection details for graph database
+Logging configuration
+Other pipeline settings
+
+=======================================================
+
+externalize the prompt templates to another file called prompt_templates.json and refer from there
+
+===================================================================================
+Make it so, that the initial augmented prompt, each step being executed, and the response of graph query if any is always logged.
+
+I need to see all of the prompt, steps being processed and added context, this should be sent to stdout, on the console, issues should be logged in another file
+============================================================
+

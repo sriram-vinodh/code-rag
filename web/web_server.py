@@ -6,6 +6,7 @@ import logging
 from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from markdown_it import MarkdownIt
 import uvicorn
 
 # Add the project root to the Python path to allow imports from the main directory
@@ -15,10 +16,6 @@ from application import Application
 class ChatRequest(BaseModel):
     """Pydantic model for chat requests."""
     question: str
-
-class SummarizeRequest(BaseModel):
-    """Pydantic model for summarization requests."""
-    conversation_history: list[str]
 
 logger = logging.getLogger(__name__)
 
@@ -70,30 +67,28 @@ async def chat_endpoint(chat_request: ChatRequest, request: Request):
     
     if rag_app and rag_app.is_setup: # noqa
         logger.info(f"Received question: {chat_request.question}")
-        answer = rag_app.ask(chat_request.question)
-        logger.info(f"Generated answer: {answer}")
+        raw_answer = rag_app.ask(chat_request.question)
+        logger.info(f"Generated raw answer: {raw_answer}")
+        # Convert the Markdown response from the LLM into an HTML string
+        md = MarkdownIt()
+        answer = md.render(raw_answer)
+        logger.debug(f"Converted answer to HTML: {answer}")
     else:
         logger.warning("RAG application not set up, returning error for chat.")
 
     return JSONResponse({"answer": answer}) # Return JSON
 
-@app.post("/api/summarize", response_class=JSONResponse)
-async def summarize_chat(summarize_request: SummarizeRequest, request: Request):
-    """Summarizes the provided conversation history."""
-    if not summarize_request.conversation_history:
-        return JSONResponse({"error": "No conversation history provided for summarization"}, status_code=400)
-
-    # If conversation_history is a list, join it into a single string
-    conversation_text = "\n".join(summarize_request.conversation_history)
-
+@app.post("/api/reload")
+async def reload_data(request: Request):
+    """Endpoint to trigger a force reload of the RAG pipeline."""
     rag_app = request.app.state.rag_app
-    summary = "Error: RAG application is not initialized or summarization failed." # noqa
-
-    if rag_app and rag_app.is_setup: # noqa
-        logger.info("Received request to summarize conversation.")
-        summary = rag_app.summarize_conversation(conversation_text) # noqa
-        logger.info(f"Generated summary: {summary[:100]}...") # Print first 100 chars
+    if rag_app:
+        logger.info("API call received to reload data.")
+        try:
+            rag_app.reload_pipeline()
+            return JSONResponse({"message": "Data reload initiated successfully."})
+        except Exception as e:
+            logger.error(f"Error during data reload: {e}", exc_info=True)
+            return JSONResponse({"error": "Failed to reload data. Check server logs."}, status_code=500)
     else:
-        logger.warning("RAG application not set up, returning error for summarization.")
-
-    return JSONResponse({"summary": summary})
+        return JSONResponse({"error": "Application not initialized."}, status_code=500)

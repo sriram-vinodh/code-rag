@@ -1,16 +1,11 @@
 import json
 import os
-import shutil
-import logging
-import subprocess
-import tempfile
-from typing import List, Dict, Any
-
+import logging  # Keeping logging as it might be necessary
+import tempfile  # Keeping tempfile as it might be necessary
+from typing import List, Dict, Any  # Keeping typing as it might be necessary
 from langchain_core.documents import Document
 from chunker_interface import ChunkerInterface
-
 logger = logging.getLogger(__name__)
-
 class CpgCodeChunker(ChunkerInterface):
     """
     A semantic chunker for Java code that uses Code Property Graphs (CPGs)

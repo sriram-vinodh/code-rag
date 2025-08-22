@@ -1,84 +1,88 @@
-import argparse
+import logging
 import sys
 import json
-import logging
-import multiprocessing
-
-from loader_interface import LoaderInterface
-from filesystem_loader import FileSystemLoader
-from parser_interface import ParserInterface
-from document_parser import DefaultDocumentParser
-from chunker_interface import ChunkerInterface
-from text_chunker import RecursiveTextChunker
-from cpg_chunker import CpgCodeChunker
-from java_code_chunker import JavaCodeChunker
-from rag_pipeline import RAGPipeline
-from storage_interface import VectorStoreInterface
-from chroma_vector_store import ChromaVectorStore
-from langchain_ollama import OllamaLLM # Updated import
-from langchain_core.prompts import ChatPromptTemplate # Added for summarization
-from langchain_core.output_parsers import StrOutputParser # Added for summarization
-from langchain_ollama import OllamaEmbeddings # Updated import
-
+import os
+import argparse
+from langchain_ollama import OllamaLLM, OllamaEmbeddings
+from rag.flow.rag_pipeline import RAGPipeline
+from rag.retriever.neo4j_graph_retriever import Neo4jGraphRetriever
+from rag.retriever.cypher_query_helper import CypherQueryHelper
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def setup_logging():
+    # Create formatters
+    console_formatter = logging.Formatter('%(message)s')  # Simple format for readability
+    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(name)s:%(lineno)d] - %(message)s')
+    
+    # Console handler for execution flow (INFO and below)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(console_formatter)
+    console_handler.addFilter(lambda record: record.levelno <= logging.INFO)
+    
+    # File handler for issues (WARNING and above)
+    os.makedirs('logs', exist_ok=True)
+    file_handler = logging.FileHandler('logs/issues.log')
+    file_handler.setLevel(logging.WARNING)
+    file_handler.setFormatter(file_formatter)
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    
+    # Remove existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Add new handlers
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+setup_logging()
 logger = logging.getLogger(__name__)
-
-# --- Background CPG Generation Function ---
-# This function runs in a separate process and must be defined at the top level
-# so that it can be pickled by multiprocessing.
-def _generate_cpgs_in_background(code_path, extensions, cpg_vector_store_path, model_name):
-    """
-    Generates CPGs for Java files in the background and stores them in a separate ChromaDB.
-    """
-    logger.info(f"Background CPG Generation Started for {code_path}")
-    try:
-        # Initialize components within the new process
-        embeddings = OllamaEmbeddings(model=model_name) # Use updated OllamaEmbeddings
-        cpg_vector_store = ChromaVectorStore(
-            embedding_function=embeddings,
-            persist_directory=cpg_vector_store_path
-        )
-        doc_parser = DefaultDocumentParser()
-        cpg_chunker = CpgCodeChunker()
-        code_loader = FileSystemLoader(directory_path=code_path, allowed_extensions=extensions)
-
-        # Load and parse Java files
-        raw_code_files = code_loader.load()
-        java_docs = [doc for doc in doc_parser.parse_documents(raw_code_files) if doc.metadata.get("language") == "java"]
-
-        if not java_docs:
-            logger.info("No Java documents found for background CPG generation.")
-            return
-
-        logger.info(f"Found {len(java_docs)} Java documents for background CPG generation.")
-        cpg_chunks = cpg_chunker.chunk_documents(java_docs)
-        logger.info(f"Generated {len(cpg_chunks)} CPG chunks in background.")
-        cpg_vector_store.add_documents(cpg_chunks)
-        logger.info(f"CPG chunks stored persistently at {cpg_vector_store_path}")
-
-    except Exception as e:
-        logger.error(f"Error during background CPG generation: {e}", exc_info=True)
-    finally:
-        logger.info("--- Background CPG Generation Finished ---")
 
 class Application:
     """
     The main application class that orchestrates the RAG pipeline.
+    This implementation focuses on a step-based execution flow with graph-based context retrieval.
     """
-    def __init__(self):
+    def __init__(self, model_name: str = "llama3"):
+        """
+        Initialize the application with the specified model.
+        
+        Args:
+            model_name: The name of the Ollama model to use
+        """
+        # Load configuration first
         self.config = self._load_config()
+        
+        # Parse arguments (which can override config)
         self.args = self._parse_args()
+        
+        # Configure logging with parsed arguments
+        self._configure_logging()
+        
+        # Initialize components
         self.llm = None
         self.embeddings = None
-        self.vector_store = None
-        self.doc_parser = None
-        self.chunker = None
-        self.java_chunker = None
-        self.code_loader = None
-        self.doc_loader = None
         self.pipeline = None
         self.is_setup = False
+        
+        # Initialize graph retriever
+        self.graph_retriever = Neo4jGraphRetriever()
+
+    def _configure_logging(self):
+        """Sets up application-wide logging."""
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(name)s] - %(message)s')
+        for handler in logging.root.handlers:
+            handler.setFormatter(formatter)
+        logger.info("Logging configured")
+
+    def _initialize_llm_and_embeddings(self):
+        """Initializes the Language Model and Embedding functions."""
+        logger.info("Initializing LLM and Embeddings...")
+        self.llm = OllamaLLM(model=self.args.model)
+        self.embeddings = OllamaEmbeddings(model=self.args.model)
+        logger.info("LLM and Embeddings initialized.")
 
     def _load_config(self, config_path="config.json"):
         """Loads the configuration from a JSON file."""
@@ -94,6 +98,7 @@ class Application:
         """Parses command-line arguments."""
         data_config = self.config.get('data_processing', {})
         pipeline_config = self.config.get('pipeline_settings', {})
+        logging_config = self.config.get('logging', {})
 
         parser = argparse.ArgumentParser(description="A modular RAG application with Ollama. Command-line arguments override config.json settings.")
         parser.add_argument("--code-path", type=str, default=data_config.get('code_path', './code'), help="Path to the directory containing source code.")
@@ -106,10 +111,30 @@ class Application:
         parser.add_argument("--background-cpg-generation-enabled", type=bool, default=data_config.get('background_cpg_generation_enabled', False), help="Enable background CPG generation.")
         parser.add_argument("--cpg-vector-store-path", type=str, default=data_config.get('cpg_vector_store_path', './chroma_cpg_db'), help="Path to store the persistent CPG vector database.")
         parser.add_argument("--vector-store-path", type=str, default=data_config.get('vector_store_path', './chroma_db'), help="Path to store the persistent vector database.")
+        parser.add_argument("--log-level", type=str.upper, default=logging_config.get('level', 'INFO'), choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help="Set the logging level.")
+        parser.add_argument("--force-reload", action="store_true", default=False, help="Force re-indexing of all documents, ignoring existing vector store data.")
         # Use parse_known_args() to ignore unrecognized arguments, making it
         # compatible with environments like the uvicorn reloader.
         args, _ = parser.parse_known_args()
         return args
+
+    def _configure_logging(self):
+        """Sets the application-wide logging level based on arguments."""
+        log_level = self.args.log_level.upper()
+        # Get the root logger and set its level. This will affect all loggers.
+        logging.getLogger().setLevel(log_level)
+
+        # Create a more detailed formatter for DEBUG mode
+        if log_level == 'DEBUG':
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(name)s:%(lineno)d] - %(message)s')
+        else:
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - [%(name)s] - %(message)s')
+
+        # Update all existing handlers with the new formatter
+        for handler in logging.root.handlers:
+            handler.setFormatter(formatter)
+
+        logger.info(f"Logging level set to {log_level}")
 
     def _initialize_llm_and_embeddings(self):
         """Initializes the Language Model and Embedding functions."""
@@ -118,126 +143,59 @@ class Application:
         self.embeddings = OllamaEmbeddings(model=self.args.model)
         logger.info("LLM and Embeddings initialized.")
 
-    def _initialize_vector_store(self):
-        """Initializes the persistent vector store."""
-        logger.info("Initializing vector store...")
-        self.vector_store: VectorStoreInterface = ChromaVectorStore(
-            embedding_function=self.embeddings,
-            persist_directory=self.args.vector_store_path
-        )
-        logger.info("Vector store initialized.")
-
-    def _initialize_parsers_and_chunkers(self):
-        """Initializes document parser and generic text chunker."""
-        logger.info("Initializing document parser and generic chunker...")
-        self.doc_parser: ParserInterface = DefaultDocumentParser()
-        self.chunker: ChunkerInterface = RecursiveTextChunker(
-            chunk_size=self.args.chunk_size,
-            chunk_overlap=self.args.chunk_overlap
-        )
-        logger.info("Document parser and generic chunker initialized.")
-
-    def _select_and_initialize_java_chunker(self):
-        """Selects and initializes the appropriate Java chunker based on configuration."""
-        self.java_chunker = None # Default to no specialized Java chunker
-        java_chunker_classes = {
-            'cpg': CpgCodeChunker,
-            'ast': JavaCodeChunker
-        }
-        
-        strategies_to_try = []
-        if self.args.java_chunker_strategy:
-            strategies_to_try.append(self.args.java_chunker_strategy)
-        
-        configured_fallbacks = self.config.get('data_processing', {}).get('java_chunker_fallback_order', ['cpg', 'ast'])
-        for strategy in configured_fallbacks:
-            if strategy not in strategies_to_try:
-                strategies_to_try.append(strategy)
-
-        for strategy_name in strategies_to_try:
-            if strategy_name in java_chunker_classes:
-                chunker_class = java_chunker_classes[strategy_name]
-                try:
-                    self.java_chunker = chunker_class()
-                    logger.info(f"Initialized {strategy_name.upper()} chunker for Java files.")
-                    break
-                except (ImportError, FileNotFoundError, RuntimeError) as e:
-                    logger.warning(f"Could not initialize {strategy_name.upper()} chunker ({e}).")
-                    if strategy_name == self.args.java_chunker_strategy and len(strategies_to_try) > strategies_to_try.index(strategy_name) + 1:
-                        logger.info(f"Attempting to use next available chunker from fallback order: {strategies_to_try[strategies_to_try.index(strategy_name)+1:]}")
-            else:
-                logger.warning(f"Unknown Java chunker strategy '{strategy_name}' specified in config. Skipping.")
-
-        if not self.java_chunker:
-            logger.warning("No specialized Java chunker could be initialized. Java files will be chunked using the default text-based chunker.")
-
-    def _start_background_cpg_generation(self):
-        """Initiates background CPG generation if enabled in configuration."""
-        if self.args.background_cpg_generation_enabled:
-            logger.info("Starting background CPG generation process...")
-            cpg_process = multiprocessing.Process(target=_generate_cpgs_in_background, args=(self.args.code_path, self.args.extensions, self.args.cpg_vector_store_path, self.args.model))
-            cpg_process.start()
-            logger.info("Background CPG generation process initiated. Main application will continue startup.")
-
     def _setup_components(self):
-        """Initializes and wires up all the components of the application."""
+        """Initializes core components of the application."""
         logger.info("Initializing core components...")
         self._initialize_llm_and_embeddings()
-        self._initialize_vector_store()
-        self._initialize_parsers_and_chunkers()
-        self._select_and_initialize_java_chunker()
-        self._start_background_cpg_generation()
-        self.code_loader: LoaderInterface = FileSystemLoader(directory_path=self.args.code_path, allowed_extensions=self.args.extensions)
-        self.doc_loader: LoaderInterface = FileSystemLoader(directory_path=self.args.docs_path, allowed_extensions=self.args.extensions)
         logger.info("Core components initialized.")
 
     def setup(self):
-        """Performs the one-time setup of the RAG pipeline by processing documents."""
+        """Performs the one-time setup of the RAG pipeline."""
         if self.is_setup:
             return
 
-        logger.info("Performing one-time application setup...")
-        self._setup_components()
-
+        logger.info("Performing application setup...")
         try:
-            parsed_code_docs, parsed_docs = self._load_and_parse_all_documents()
-            documents = parsed_code_docs + parsed_docs
-
-            if not documents:
-                self._handle_no_documents_found()
-                return
-
-            logger.info(f"Loaded and parsed {len(documents)} documents.")
+            self._setup_components()
             
-            chunked_documents = self._chunk_documents_by_type(documents)
-            logger.info(f"Total documents chunked: {len(chunked_documents)}.")
-
-            self._add_chunks_to_vector_store_and_build_pipeline(chunked_documents)
-
+            # Initialize graph retriever
+            if self.graph_retriever:
+                logger.info("Initializing graph retriever...")
+                self.graph_retriever.connect()
+                logger.info("Graph retriever initialized.")
+            
+            # Build the pipeline
+            self._build_pipeline_from_vector_store()
+            
         except Exception as e:
             self._handle_setup_exception(e)
 
         self.is_setup = True
         logger.info("Application setup complete.")
 
+    def _process_and_embed_documents(self):
+        """Loads, parses, chunks, and embeds documents into the vector store."""
+        logger.info("Vector store not found or is empty. Processing and embedding documents...")
+        parsed_code_docs, parsed_docs = self._load_and_parse_all_documents()
+        documents = parsed_code_docs + parsed_docs
+
+        if not documents:
+            logger.warning("No documents found to process. The vector store will be empty.")
+            return
+
+        logger.info(f"Loaded and parsed {len(documents)} documents.")
+        chunked_documents = self._chunk_documents_by_type(documents)
+        logger.info(f"Total documents chunked: {len(chunked_documents)}.")
+        self.vector_store.add_documents(chunked_documents)
+
     def _load_and_parse_all_documents(self):
         """Loads and parses documents from code and docs directories."""
-        logger.info("Loading and parsing documents from specified paths...")
         raw_code_files = self.code_loader.load()
         raw_doc_files = self.doc_loader.load()
         
         parsed_code_docs = self.doc_parser.parse_documents(raw_code_files)
         parsed_docs = self.doc_parser.parse_documents(raw_doc_files)
         return parsed_code_docs, parsed_docs
-
-    def _handle_no_documents_found(self):
-        """Handles the scenario where no documents are found during setup."""
-        logger.warning(f"No documents found in '{self.args.code_path}' or '{self.args.docs_path}'. The RAG pipeline will operate without custom context.")
-        try:
-            self.vector_store.as_retriever()
-            logger.info("Loaded existing vector store despite no new documents.")
-        except ValueError:
-            logger.warning("No documents to process and no existing vector store found. RAG pipeline will be limited.")
 
     def _chunk_documents_by_type(self, documents: list) -> list:
         """Chunks documents based on their type (Java vs. others)."""
@@ -267,13 +225,14 @@ class Application:
                 logger.info(f"Split {len(java_docs)} Java documents into {len(java_chunks)} chunks using the default chunker (specialized Java chunker not available or failed).")
         return chunked_documents
 
-    def _add_chunks_to_vector_store_and_build_pipeline(self, chunked_documents: list):
-        """Adds chunks to the vector store and builds the RAG pipeline."""
-        self.vector_store.add_documents(chunked_documents)
-        retriever = self.vector_store.as_retriever()
-        pipeline_config = self.config.get('pipeline_settings', {})
-        prompt_template = pipeline_config.get('prompt_template', "Answer the question based only on the following context:\n\n{context}\n\nQuestion: {question}")
-        self.pipeline = RAGPipeline(llm=self.llm, retriever=retriever, prompt_template=prompt_template)
+    def _build_pipeline_from_vector_store(self):
+        """Builds the RAG pipeline using the graph retriever."""
+        logger.info("Building RAG pipeline...")
+        self.pipeline = RAGPipeline(
+            llm=self.llm,
+            embeddings=self.embeddings,
+            neo4j_retriever=self.graph_retriever
+        )
 
     def _handle_setup_exception(self, e: Exception):
         """Handles exceptions during the setup process."""
@@ -284,41 +243,48 @@ class Application:
         
         raise RuntimeError(f"Failed to set up the RAG pipeline due to a data processing error: {e}") from e
 
-    def setup(self):
-        """Performs the one-time setup of the RAG pipeline by processing documents."""
-        if self.is_setup:
-            return
+    def _get_graph_context(self, question: str) -> str:
+        """Attempts to retrieve relevant graph context from Neo4j for the question."""
+        if not self.graph_retriever:
+            logger.warning("Graph retriever is not initialized. Skipping graph context retrieval.")
+            return ""
 
-        logger.info("Performing one-time application setup...")
-        self._setup_components()
-
-        try:
-            parsed_code_docs, parsed_docs = self._load_and_parse_all_documents()
-            documents = parsed_code_docs + parsed_docs
-
-            if not documents:
-                self._handle_no_documents_found()
-                return
-
-            logger.info(f"Loaded and parsed {len(documents)} documents.")
-            
-            chunked_documents = self._chunk_documents_by_type(documents)
-            logger.info(f"Total documents chunked: {len(chunked_documents)}.")
-
-            self._add_chunks_to_vector_store_and_build_pipeline(chunked_documents)
-
-        except Exception as e:
-            self._handle_setup_exception(e)
-
-        self.is_setup = True
-        logger.info("Application setup complete.")
+        cypher = CypherQueryHelper.build_flexible_query(question)
+        if cypher:
+            logger.info(f"Constructed Cypher query: {cypher}")
+            try:
+                results = self.graph_retriever.query(cypher)
+                logger.info(f"Neo4j query result: {json.dumps(results, indent=2)}")
+                # Extract method/class names from Neo4j result
+                search_terms = set()
+                for record in results:
+                    for key, value in record.items():
+                        if isinstance(value, dict) and 'name' in value:
+                            search_terms.add(value['name'])
+                        elif isinstance(value, list):
+                            for item in value:
+                                if isinstance(item, dict) and 'name' in item:
+                                    search_terms.add(item['name'])
+                logger.info(f"Search terms extracted from graphDB: {search_terms}")
+                return '\n'.join(search_terms)
+            except Exception as e:
+                logger.warning(f"Neo4j graph retrieval failed: {e}")
+        return ""
 
     def ask(self, question: str) -> str:
-        """Asks a question to the RAG pipeline. Will trigger setup on first run."""
+        """
+        Asks a question to the RAG pipeline.
+        This method processes the query through the step-based execution flow.
+        """
         if not self.is_setup:
             self.setup()
+            
         if not self.pipeline:
-            return "The RAG pipeline is not available, likely because no documents were found during setup."
+            return "The RAG pipeline is not available, likely because the setup failed."
+            
+        if not self.graph_retriever:
+            logger.warning("Graph retriever is not available. Some functionality may be limited.")
+            
         return self.pipeline.ask(question)
 
     def run_cli(self):
@@ -334,21 +300,5 @@ class Application:
             question = input("\nQuestion: ")
             if question.lower() == 'exit':
                 break
-            answer = self.pipeline.ask(question)
+            answer = self.ask(question)
             logger.info(f"Answer: {answer}")
-
-    def summarize_conversation(self, conversation_text: str) -> str:
-        """Summarizes a given conversation text using the LLM."""
-        if not self.llm:
-            # This case should ideally not happen if setup() was successful
-            return "LLM not initialized for summarization."
-        
-        summarize_prompt = ChatPromptTemplate.from_template(
-            "Please summarize the following conversation:\n\n{conversation}\n\nSummary:"
-        )
-        summarize_chain = summarize_prompt | self.llm | StrOutputParser()
-        try:
-            return summarize_chain.invoke({"conversation": conversation_text})
-        except Exception as e:
-            logger.error(f"Error during summarization: {e}", exc_info=True)
-            return "Failed to generate summary."
