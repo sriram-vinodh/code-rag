@@ -7,6 +7,7 @@ from langchain_ollama import OllamaLLM, OllamaEmbeddings
 from rag.flow.rag_pipeline import RAGPipeline
 from rag.retriever.neo4j_graph_retriever import Neo4jGraphRetriever
 from rag.retriever.cypher_query_helper import CypherQueryHelper
+from mcp_client import MCPNeo4jClient
 # Configure logging
 def setup_logging():
     # Create formatters
@@ -69,6 +70,15 @@ class Application:
         
         # Initialize graph retriever
         self.graph_retriever = Neo4jGraphRetriever()
+        
+        # Initialize MCP client
+        self.mcp_client = None
+        if self.config.get("mcp", {}).get("enabled", False):
+            try:
+                self.mcp_client = MCPNeo4jClient()
+                logger.info("MCP client initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize MCP client: {e}. Will use direct Neo4j connection.")
 
     def _configure_logging(self):
         """Sets up application-wide logging."""
@@ -158,6 +168,12 @@ class Application:
         try:
             self._setup_components()
             
+            # Initialize MCP client
+            if self.mcp_client:
+                logger.info("Connecting to MCP server...")
+                self.mcp_client.connect()
+                logger.info("MCP server connected")
+            
             # Initialize graph retriever
             if self.graph_retriever:
                 logger.info("Initializing graph retriever...")
@@ -231,7 +247,8 @@ class Application:
         self.pipeline = RAGPipeline(
             llm=self.llm,
             embeddings=self.embeddings,
-            neo4j_retriever=self.graph_retriever
+            neo4j_retriever=self.graph_retriever,
+            mcp_client=self.mcp_client
         )
 
     def _handle_setup_exception(self, e: Exception):

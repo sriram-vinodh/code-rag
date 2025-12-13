@@ -18,14 +18,16 @@ class RAGPipeline:
         self,
         llm: BaseLanguageModel,
         embeddings: Optional[Embeddings] = None,
-        neo4j_retriever: Optional[object] = None  # Neo4jGraphRetriever type
+        neo4j_retriever: Optional[object] = None,  # Neo4jGraphRetriever type
+        mcp_client: Optional[object] = None  # MCPNeo4jClient type
     ):
         """Initialize the RAG pipeline with required components."""
         self.llm = llm
         self.embeddings = embeddings
         self.neo4j_retriever = neo4j_retriever
+        self.mcp_client = mcp_client
         self.prompt_processor = PromptProcessor(llm)
-        self.step_executor = StepExecutor(llm, neo4j_retriever)
+        self.step_executor = StepExecutor(llm, neo4j_retriever, mcp_client)
         self.templates = self._load_templates()
         
     def _load_templates(self) -> Dict[str, str]:

@@ -75,3 +75,5 @@ Make it so, that the initial augmented prompt, each step being executed, and the
 I need to see all of the prompt, steps being processed and added context, this should be sent to stdout, on the console, issues should be logged in another file
 ============================================================
 
+ test the nl_to_cypher. and if the loss is too much, inspect the training data and add high quality synthetic data to augment training. the added data should have a general syntax which can be used for crafting prompts
+ ==================================================================

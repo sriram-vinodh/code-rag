@@ -1,12 +1,11 @@
 import re
 import logging
 from typing import Optional, List
-from helper_models.nl_to_cypher import generate_cypher, train_and_save
 
 class CypherQueryHelper:
     """
     Constructs Cypher queries for the code knowledge graph based on user questions.
-    Uses a trained RNN model for NL to Cypher translation.
+    Uses a Large Language Model (LLM) for NL to Cypher translation.
     """
     
     GRAPH_SCHEMA = """
@@ -28,15 +27,28 @@ class CypherQueryHelper:
     @staticmethod
     def generate_cypher_with_llm(llm, question: str) -> str:
         """
-        Generates a Cypher query using the trained RNN model.
-        Falls back to template-based generation if model fails.
+        Generates a Cypher query using a large language model (LLM).
+        Falls back to template-based generation if the LLM fails.
         """
+        prompt = f"""You are an expert Cypher query generator.
+Given the following graph schema and a user question, generate a Cypher query to answer the question.
+
+Schema:
+{CypherQueryHelper.GRAPH_SCHEMA}
+
+Question: {question}
+
+Query:
+"""
         try:
-            cypher_query = generate_cypher(question)
+            # Assuming the llm object can be called with a prompt to get a response.
+            # This might need to be adapted based on the actual LLM interface.
+            cypher_query = llm(prompt).strip()
             if cypher_query and len(cypher_query) > 10:  # Basic validation
+                logging.info(f"Generated Cypher query with LLM: {cypher_query}")
                 return cypher_query
         except Exception as e:
-            logging.error(f"RNN model error: {e}. Falling back to template.")
+            logging.error(f"LLM query generation error: {e}. Falling back to template.")
         
         # Fallback to template-based approach
         return CypherQueryHelper.build_flexible_query(question)
